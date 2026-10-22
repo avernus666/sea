@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sea}
+      POSTGRES_USER: ${POSTGRES_USER:-sea}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_password}
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/migrations/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sea} -d ${POSTGRES_DB:-sea}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  api:
+    build: ./backend
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://${POSTGRES_USER:-sea}:${POSTGRES_PASSWORD:-local_dev_password}@postgres:5432/${POSTGRES_DB:-sea}?sslmode=disable
+      ALLOWED_ORIGIN: http://localhost:4173
+    ports: ["8080:8080"]
+    depends_on:
+      postgres: {condition: service_healthy}
+  recommendation-service:
+    build: ./recommendation-service
+    ports: ["8081:8081"]
+    environment:
+      PYTHONUNBUFFERED: 1
+  frontend:
+    build: ./frontend
+    ports: ["4173:4173"]
+    depends_on: [api]
+volumes:
+  pgdata:
